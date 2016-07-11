@@ -12,8 +12,8 @@ def git(*args):
 
 def read_config():
     raw = git('config', '--list', '--null')
-    pairs = [p.strip() for p in raw.split('\0') if len(p.strip())]
-    return { k.lower(): v for k, v in [s.split('\n') for s in pairs] }
+    pairs = [p.strip().split('\n') for p in raw.split('\0') if len(p.strip())]
+    return { k.lower(): v for k, v in [p + ['']*(2 - len(p)) for p in pairs] }
 
 config = read_config()
 
@@ -121,6 +121,16 @@ class ConfigTest(unittest.TestCase):
         with patch('__main__.git', return_value=conf):
             c = read_config()
             self.assertEquals(c['key3'], 'value3')
+
+    def test_empty(self):
+        conf = '\0'.join([
+            'key1\n',
+        ])
+
+        from mock import patch
+        with patch('__main__.git', return_value=conf):
+            c = read_config()
+            self.assertEquals(c['key1'], '')
 
 class UpdateDataTest(unittest.TestCase):
     def test_works(self):
