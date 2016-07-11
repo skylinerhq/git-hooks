@@ -1,0 +1,82 @@
+#!/usr/bin/env python2
+import subprocess
+import sys
+import unittest
+
+
+def git(*args):
+    p = subprocess.Popen(['git'] + list(args), stdout=subprocess.PIPE)
+    return p.stdout.read().decode('utf-8').strip()
+
+
+rev_fields = [
+    ('%H', 'sha'),
+    ('%P', 'parents'),
+    ('%D', 'ref'),
+    ('%cN', 'committer.name'),
+    ('%cE', 'committer.email'),
+    ('%cI', 'committer.date'),
+    ('%aN', 'author.name'),
+    ('%aE', 'author.email'),
+    ('%aI', 'author.date'),
+]
+
+
+def dot_set(d, path, v):
+    """Sets a key in a nested dict, where path is a string like 'foo.bar'"""
+    key = path.split('.')
+    for k in key[:-1]:
+        d = d.setdefault(k, {})
+    d[key[-1]] = v
+
+
+def update(old_sha, new_sha, ref):
+    rev_format = '%x00'.join([p for p, _ in rev_fields])
+    revs = git('rev-list', '--pretty=%s' % rev_format, '--reverse',
+               '%s..%s' % (old_sha, new_sha))
+
+    for l in revs.splitlines():
+        # skip header rows
+        if l.startswith('commit '):
+            continue
+
+        commit = {}
+        for field, value in zip([f for _, f in rev_fields], l.split('\0')):
+            dot_set(commit, field, value)
+
+        commit['parents'] = [{ 'sha': s } for s in commit['parents'].split(' ')]
+        print commit
+
+
+def main():
+    if sys.argv[1:] == ['--test']:
+        sys.argv = [sys.argv[0]] + ['--verbose']
+        unittest.main()
+        return
+
+    for l in sys.stdin.xreadlines():
+        old_sha, new_sha, ref = l.split()
+        update(old_sha, new_sha, ref)
+
+
+# Tests -- to run, use ./post-receive --test
+
+class DotSetTest(unittest.TestCase):
+    def test_one_key(self):
+        c = {}
+        dot_set(c, 'foo', 1)
+        self.assertEquals(c, {'foo': 1})
+
+    def test_nested(self):
+        c = {}
+        dot_set(c, 'foo.bar', 1)
+        self.assertEquals(c, {'foo': {'bar': 1}})
+
+    def test_merge(self):
+        c = {'foo': {'bar': 1}}
+        dot_set(c, 'foo.baz', 3)
+        self.assertEquals(c, {'foo': {'bar': 1, 'baz': 3}})
+
+
+if __name__ == '__main__':
+    main()
