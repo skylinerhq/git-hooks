@@ -21,6 +21,8 @@ rev_fields = [
     ('%aI', 'author.date'),
 ]
 
+rev_format = '%x00'.join([p for p, _ in rev_fields])
+
 
 def dot_set(d, path, v):
     """Sets a key in a nested dict, where path is a string like 'foo.bar'"""
@@ -30,8 +32,16 @@ def dot_set(d, path, v):
     d[key[-1]] = v
 
 
+def parse_commit(revline):
+    commit = {}
+    for field, value in zip([f for _, f in rev_fields], revline.split('\0')):
+        dot_set(commit, field, value)
+
+    commit['parents'] = [{ 'sha': s } for s in commit['parents'].split(' ')]
+    return commit
+
+
 def update(old_sha, new_sha, ref):
-    rev_format = '%x00'.join([p for p, _ in rev_fields])
     revs = git('rev-list', '--pretty=%s' % rev_format, '--reverse',
                '%s..%s' % (old_sha, new_sha))
 
@@ -40,12 +50,7 @@ def update(old_sha, new_sha, ref):
         if l.startswith('commit '):
             continue
 
-        commit = {}
-        for field, value in zip([f for _, f in rev_fields], l.split('\0')):
-            dot_set(commit, field, value)
-
-        commit['parents'] = [{ 'sha': s } for s in commit['parents'].split(' ')]
-        print commit
+        print parse_commit(l)
 
 
 def main():
@@ -60,6 +65,30 @@ def main():
 
 
 # Tests -- to run, use ./post-receive --test
+
+class ParseCommitTest(unittest.TestCase):
+    def test_works(self):
+        fields = [
+            'sha', 'parentsha', 'ref', 'cname', 'cemail', 'cdate',
+            'aname', 'aemail', 'adate',
+        ]
+        self.assertEquals(parse_commit('\0'.join(fields)), {
+            'sha': 'sha',
+            'parents': [{'sha': 'parentsha'}],
+            'ref': 'ref',
+            'committer': {'name': 'cname', 'email': 'cemail', 'date': 'cdate',},
+            'author': {'name': 'aname', 'email': 'aemail', 'date': 'adate',},
+        })
+
+    def test_multiple_parents(self):
+        fields = [
+            'sha', 'parentsha1 parentsha2', 'ref', 'cname', 'cemail', 'cdate',
+            'aname', 'aemail', 'adate',
+        ]
+        c = parse_commit('\0'.join(fields))
+        self.assertEquals([{'sha': 'parentsha1'}, {'sha': 'parentsha2'}],
+                          c['parents'])
+
 
 class DotSetTest(unittest.TestCase):
     def test_one_key(self):
