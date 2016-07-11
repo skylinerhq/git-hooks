@@ -1,11 +1,13 @@
 #!/usr/bin/env python2.7
+import json
 import logging
 import subprocess
 import sys
 import unittest
 import time
 import traceback
-from urllib2 import urlopen
+from urllib2 import Request, URLError, HTTPError, urlopen
+from urlparse import urljoin
 import urlparse
 
 
@@ -87,13 +89,45 @@ def update_data(before, after, ref):
     }
 
 
+class SkylinerResponseError(IOError):
+    pass
+
+
 class Update(object):
     def __init__(self, before, after, ref):
         self.data = update_data(before, after, ref)
 
     def send(self):
         server = config.get('skyliner.server', 'https://www.skyliner.io')
+        token = config['skyliner.token']
+        repo_name = config['skyliner.repo-name']
 
+        url = urljoin(server, '/commits/%s/%s' % (token, repo_name))
+        r = Request(url, json.dumps(self.data), {
+            'Content-Type': 'application/json',
+        })
+        response = urlopen(r).read()
+        logger.info('Sent commits to %s' % url)
+        logger.info('Payload: %s' % self.data)
+
+        try:
+            data = json.loads(response)
+        except ValueError:
+            raise SkylinerResponseError(
+                'Received a malformed response: %s' % response
+            )
+        else:
+            if 'ok' not in data:
+                raise SkylinerResponseError(
+                    'Unexpected response from server: %s' % response
+                )
+
+            if not data['ok']:
+                raise SkylinerResponseError(
+                    'The server reported an error: %s' % response
+                )
+
+            logger.debug('Received response: %s' % response)
 
 
 def update(before, after, ref):
@@ -105,11 +139,14 @@ def update(before, after, ref):
             u.send()
             logger.info('done.')
             return
-        except Exception, e:
+        except (URLError, HTTPError), e:
             if retry < 4:
                 logger.warn('Failed to submit commits to Skyliner. '
                             'Error: %s. Retrying...' % e)
                 time.sleep(0.2 * retry)
+
+        except SkylinerResponseError, e:
+            break
 
     logger.warn('Failed to submit commits to Skyliner. %s' %
                 traceback.format_exc())
