@@ -22,7 +22,16 @@ def read_config():
     pairs = [p.strip().split('\n') for p in raw.split('\0') if len(p.strip())]
     return { k.lower(): v for k, v in [p + ['']*(2 - len(p)) for p in pairs] }
 
-config = read_config()
+
+class Config(dict):
+    def __init__(self):
+        self.update(read_config())
+
+    def bool(self, k, default=None):
+        return self.get(k, default) == 'true'
+
+
+config = Config()
 
 
 rev_fields = [
@@ -122,6 +131,12 @@ def main():
         unittest.main()
         return
 
+    if config.bool('skyliner.verbose'):
+        logger.setLevel(logging.DEBUG)
+
+    logger.debug('config: %s' % { k: v for k, v in config.items()
+                                  if k.startswith('skyliner.')})
+
     for l in sys.stdin.xreadlines():
         before, after, ref = l.split()
         update(before, after, ref)
@@ -139,7 +154,7 @@ class ConfigTest(unittest.TestCase):
 
         from mock import patch
         with patch('__main__.git', return_value=conf):
-            c = read_config()
+            c = Config()
             self.assertEquals(c['key1'], 'value1')
 
     def test_lowercases(self):
@@ -151,7 +166,7 @@ class ConfigTest(unittest.TestCase):
 
         from mock import patch
         with patch('__main__.git', return_value=conf):
-            c = read_config()
+            c = Config()
             self.assertEquals(c['key3'], 'value3')
 
     def test_empty(self):
@@ -161,8 +176,36 @@ class ConfigTest(unittest.TestCase):
 
         from mock import patch
         with patch('__main__.git', return_value=conf):
-            c = read_config()
+            c = Config()
             self.assertEquals(c['key1'], '')
+
+    def test_bool_missing(self):
+        conf = '\0'.join([
+            'key1\n',
+        ])
+        from mock import patch
+        with patch('__main__.git', return_value=conf):
+            c = Config()
+            self.assertFalse(c.bool('key1'))
+
+    def test_bool_false(self):
+        conf = '\0'.join([
+            'key1\nfalse',
+        ])
+        from mock import patch
+        with patch('__main__.git', return_value=conf):
+            c = Config()
+            self.assertFalse(c.bool('key1'))
+
+    def test_bool_true(self):
+        conf = '\0'.join([
+            'key1\ntrue',
+        ])
+        from mock import patch
+        with patch('__main__.git', return_value=conf):
+            c = Config()
+            self.assertTrue(c.bool('key1'))
+
 
 class UpdateDataTest(unittest.TestCase):
     def test_works(self):
