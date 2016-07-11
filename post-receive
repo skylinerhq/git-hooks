@@ -1,4 +1,5 @@
 #!/usr/bin/env python2
+from __future__ import with_statement
 import subprocess
 import sys
 import unittest
@@ -41,30 +42,81 @@ def parse_commit(revline):
     return commit
 
 
-def update(old_sha, new_sha, ref):
+def update_data(before, after, ref):
     revs = git('rev-list', '--pretty=%s' % rev_format, '--reverse',
-               '%s..%s' % (old_sha, new_sha))
+               '%s..%s' % (before, after))
 
+    commits = []
     for l in revs.splitlines():
         # skip header rows
         if l.startswith('commit '):
             continue
 
-        print parse_commit(l)
+        commits.append(parse_commit(l))
+
+    return {
+        'ref': ref,
+        'before': before,
+        'after': after,
+        'commits': commits
+    }
+
+
+def update(before, after, ref):
+    print update_data(before, after, ref)
+
+
+def assert_mock_lib():
+    # avoid taking a dependency on mock for the normal operation of
+    # the script.
+    try: import mock
+    except ImportError:
+        print 'Install mock to run tests (`pip install mock`)'
+        sys.exit(1)
 
 
 def main():
     if sys.argv[1:] == ['--test']:
+        assert_mock_lib()
         sys.argv = [sys.argv[0]] + ['--verbose']
         unittest.main()
         return
 
     for l in sys.stdin.xreadlines():
-        old_sha, new_sha, ref = l.split()
-        update(old_sha, new_sha, ref)
+        before, after, ref = l.split()
+        update(before, after, ref)
 
 
 # Tests -- to run, use ./post-receive --test
+
+class UpdateDataTest(unittest.TestCase):
+    def test_works(self):
+        fields = [
+            'sha', 'parentsha', 'ref', 'cname', 'cemail', 'cdate',
+            'aname', 'aemail', 'adate',
+        ]
+        revs = '\n'.join([
+            'commit sha',
+            '\0'.join(fields),
+            'commit sha',
+            '\0'.join(fields),
+        ])
+        commit = {
+            'sha': 'sha',
+            'parents': [{'sha': 'parentsha'}],
+            'ref': 'ref',
+            'committer': {'name': 'cname', 'email': 'cemail', 'date': 'cdate',},
+            'author': {'name': 'aname', 'email': 'aemail', 'date': 'adate',},
+        }
+        from mock import patch
+        with patch('__main__.git', return_value=revs):
+            self.assertEquals({
+                'before': 'beforesha',
+                'after': 'aftersha',
+                'ref': 'refs/heads/master',
+                'commits': [commit, commit]
+            }, update_data('beforesha', 'aftersha', 'refs/heads/master'))
+
 
 class ParseCommitTest(unittest.TestCase):
     def test_works(self):
