@@ -2,11 +2,20 @@
 import subprocess
 import sys
 import unittest
+from urllib2 import urlopen
 
 
 def git(*args):
     p = subprocess.Popen(['git'] + list(args), stdout=subprocess.PIPE)
     return p.stdout.read().decode('utf-8').strip()
+
+
+def read_config():
+    raw = git('config', '--list', '--null')
+    pairs = [p.strip() for p in raw.split('\0') if len(p.strip())]
+    return { k.lower(): v for k, v in [s.split('\n') for s in pairs] }
+
+config = read_config()
 
 
 rev_fields = [
@@ -87,6 +96,31 @@ def main():
 
 
 # Tests -- to run, use ./post-receive --test
+
+class ConfigTest(unittest.TestCase):
+    def test_works(self):
+        conf = '\0'.join([
+            'key1\nvalue1',
+            'key2\nvalue2',
+            'KEY3\nvalue3',
+        ])
+
+        from mock import patch
+        with patch('__main__.git', return_value=conf):
+            c = read_config()
+            self.assertEquals(c['key1'], 'value1')
+
+    def test_lowercases(self):
+        conf = '\0'.join([
+            'key1\nvalue1',
+            'key2\nvalue2',
+            'KEY3\nvalue3',
+        ])
+
+        from mock import patch
+        with patch('__main__.git', return_value=conf):
+            c = read_config()
+            self.assertEquals(c['key3'], 'value3')
 
 class UpdateDataTest(unittest.TestCase):
     def test_works(self):
