@@ -1,8 +1,15 @@
 #!/usr/bin/env python2.7
+import logging
 import subprocess
 import sys
 import unittest
+import time
+import traceback
 from urllib2 import urlopen
+
+
+logging.basicConfig(level=logging.INFO, format='[SKYLINER] %(msg)s')
+logger = logging.getLogger(__name__)
 
 
 def git(*args):
@@ -70,8 +77,31 @@ def update_data(before, after, ref):
     }
 
 
+class Update(object):
+    def __init__(self, before, after, ref):
+        self.data = update_data(before, after, ref)
+
+    def send(self):
+        pass
+
+
 def update(before, after, ref):
-    print update_data(before, after, ref)
+    logger.info('Notifying application of git push...')
+
+    u = Update(before, after, ref)
+    for retry in range(5):
+        try:
+            u.send()
+            logger.info('done.')
+            return
+        except Exception, e:
+            if retry < 4:
+                logger.warn('Failed to submit commits to Skyliner. '
+                            'Error: %s. Retrying...' % e)
+                time.sleep(0.2 * retry)
+
+    logger.warn('Failed to submit commits to Skyliner. %s' %
+                traceback.format_exc())
 
 
 def assert_mock_lib():
@@ -81,6 +111,8 @@ def assert_mock_lib():
     except ImportError:
         print 'Install mock to run tests (`pip install mock`)'
         sys.exit(1)
+
+
 
 
 def main():
