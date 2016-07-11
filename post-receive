@@ -6,6 +6,7 @@ import unittest
 import time
 import traceback
 from urllib2 import urlopen
+import urlparse
 
 
 logging.basicConfig(level=logging.INFO, format='[SKYLINER] %(msg)s')
@@ -91,7 +92,8 @@ class Update(object):
         self.data = update_data(before, after, ref)
 
     def send(self):
-        pass
+        server = config.get('skyliner.server', 'https://www.skyliner.io')
+
 
 
 def update(before, after, ref):
@@ -121,14 +123,35 @@ def assert_mock_lib():
         print 'Install mock to run tests (`pip install mock`)'
         sys.exit(1)
 
+def assert_configured(conf=config):
+    ok = True
 
+    if not conf.get('skyliner.token'):
+        ok = False
+        logger.error(
+            'Please have a repository administrator set a valid Skyliner token '
+            'for this repository: `git config skyliner.token <token>`\n'
+            'Your token can be found on your account settings page.'
+        )
 
+    if not conf.get('skyliner.repo-name'):
+        ok = False
+        logger.error(
+            'Please have a repository administrator set a repository name: '
+            '`git config skyliner.repo-name <name>'
+        )
+
+    return ok
 
 def main():
     if sys.argv[1:] == ['--test']:
         assert_mock_lib()
         sys.argv = [sys.argv[0]] + ['--verbose']
+        logger.setLevel(logging.CRITICAL)
         unittest.main()
+        return
+
+    if not assert_configured():
         return
 
     if config.bool('skyliner.verbose'):
@@ -143,6 +166,20 @@ def main():
 
 
 # Tests -- to run, use ./post-receive --test
+
+class AssertConfiguredTest(unittest.TestCase):
+    def test_ok(self):
+        conf = { 'skyliner.repo-name': 'foo', 'skyliner.token': 'bar' }
+        self.assertTrue(assert_configured(conf))
+
+    def test_missing_name(self):
+        conf = { 'skyliner.token': 'bar' }
+        self.assertFalse(assert_configured(conf))
+
+    def test_missing_token(self):
+        conf = { 'skyliner.repo-name': 'foo'}
+        self.assertFalse(assert_configured(conf))
+
 
 class ConfigTest(unittest.TestCase):
     def test_works(self):
