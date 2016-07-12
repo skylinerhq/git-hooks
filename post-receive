@@ -41,12 +41,12 @@ rev_fields = [
     ('%H', 'sha'),
     ('%P', 'parents'),
     ('%D', 'ref'),
-    ('%cN', 'committer.name'),
-    ('%cE', 'committer.email'),
-    ('%cI', 'committer.date'),
-    ('%aN', 'author.name'),
-    ('%aE', 'author.email'),
-    ('%aI', 'author.date'),
+    ('%cN', 'commit.committer.name'),
+    ('%cE', 'commit.committer.email'),
+    ('%cI', 'commit.committer.date'),
+    ('%aN', 'commit.author.name'),
+    ('%aE', 'commit.author.email'),
+    ('%aI', 'commit.author.date'),
 ]
 
 rev_format = '%x00'.join([p for p, _ in rev_fields])
@@ -299,8 +299,11 @@ class UpdateDataTest(unittest.TestCase):
             'sha': 'sha',
             'parents': [{'sha': 'parentsha'}],
             'ref': 'ref',
-            'committer': {'name': 'cname', 'email': 'cemail', 'date': 'cdate',},
-            'author': {'name': 'aname', 'email': 'aemail', 'date': 'adate',},
+            'commit': {
+                'committer': {'name': 'cname', 'email': 'cemail',
+                              'date': 'cdate',},
+                'author': {'name': 'aname', 'email': 'aemail', 'date': 'adate',},
+            },
         }
         from mock import patch
         with patch('__main__.git', return_value=revs):
@@ -322,8 +325,11 @@ class ParseCommitTest(unittest.TestCase):
             'sha': 'sha',
             'parents': [{'sha': 'parentsha'}],
             'ref': 'ref',
-            'committer': {'name': 'cname', 'email': 'cemail', 'date': 'cdate',},
-            'author': {'name': 'aname', 'email': 'aemail', 'date': 'adate',},
+            'commit': {
+                'committer': {'name': 'cname', 'email': 'cemail',
+                              'date': 'cdate',},
+                'author': {'name': 'aname', 'email': 'aemail', 'date': 'adate',},
+            },
         })
 
     def test_multiple_parents(self):
