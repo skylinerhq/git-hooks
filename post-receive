@@ -103,12 +103,13 @@ class Update(object):
         repo_name = config['skyliner.repo-name']
 
         url = urljoin(server, '/commits/%s/%s' % (token, repo_name))
+        logger.debug('Sent commits to %s' % url)
+        logger.debug('Payload: %s' % json.dumps(self.data))
+
         r = Request(url, json.dumps(self.data), {
             'Content-Type': 'application/json',
         })
         response = urlopen(r).read()
-        logger.info('Sent commits to %s' % url)
-        logger.info('Payload: %s' % self.data)
         logger.debug('Response: %s' % response)
 
         try:
