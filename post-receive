@@ -109,6 +109,7 @@ class Update(object):
         response = urlopen(r).read()
         logger.info('Sent commits to %s' % url)
         logger.info('Payload: %s' % self.data)
+        logger.debug('Response: %s' % response)
 
         try:
             data = json.loads(response)
